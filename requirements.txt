@@ -6,15 +6,7 @@
 # To learn more, see https://pip.pypa.io/en/stable/reference/requirements-file-format/
 
 runpod
-hf_transfer
-
-torch
-accelerate
 transformers
-sentencepiece
+torch
+numpy
 huggingface_hub
-
-
-mistral_inference
-mistral_common
-protobuf
