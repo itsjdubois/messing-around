@@ -2,7 +2,7 @@
 import os
 from huggingface_hub import login, snapshot_download
 
-HF_TOKEN = os.environ.get("HF_TOKEN", "")
+HF_TOKEN = os.environ.get("HF_TOKEN")
 if HF_TOKEN:
     login(HF_TOKEN)
 else:
