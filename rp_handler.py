@@ -41,12 +41,37 @@ CATEGORIES = {
 # Load model and tokenizer at container startup
 def load_model():
     print("Loading BERT transaction categorization model...")
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_DIR)
-    model = BertForSequenceClassification.from_pretrained(MODEL_DIR)
-    model.eval()
-    
-    print("Model loaded successfully!")
-    return model, tokenizer, CATEGORIES
+    try:
+        # First try loading tokenizer
+        tokenizer = AutoTokenizer.from_pretrained(MODEL_DIR, local_files_only=True)
+        
+        # Try loading the model with specific parameters
+        model = BertForSequenceClassification.from_pretrained(
+            MODEL_DIR,
+            local_files_only=True,
+            low_cpu_mem_usage=True  # Helps with memory usage during loading
+        )
+        
+        print("Model loaded successfully!")
+        return model, tokenizer, CATEGORIES
+        
+    except Exception as e:
+        print(f"Error loading model: {e}")
+        
+        # Try with device_map to auto-manage memory
+        try:
+            print("Attempting alternative loading method...")
+            model = BertForSequenceClassification.from_pretrained(
+                MODEL_DIR,
+                local_files_only=True,
+                device_map="auto"  # Automatically manages memory
+            )
+            print("Model loaded successfully with alternative method!")
+            return model, tokenizer, CATEGORIES
+            
+        except Exception as e2:
+            print(f"Fatal error loading model: {e2}")
+            raise e2
 
 # Initialize model
 model, tokenizer, id2label = load_model()
