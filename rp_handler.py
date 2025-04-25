@@ -1,7 +1,7 @@
 import os
 import runpod
-from typing import Dict
-from transformers import AutoTokenizer, BertForSequenceClassification
+from typing import Dict, List, Union
+from transformers import BertTokenizer, BertForSequenceClassification
 import torch
 import numpy as np
 
@@ -42,8 +42,8 @@ CATEGORIES = {
 def load_model():
     print("Loading BERT transaction categorization model...")
     try:
-        # First try loading tokenizer
-        tokenizer = AutoTokenizer.from_pretrained(MODEL_DIR, local_files_only=True)
+        # Use BertTokenizer instead of AutoTokenizer
+        tokenizer = BertTokenizer.from_pretrained(MODEL_DIR, local_files_only=True)
         
         # Try loading the model with specific parameters
         model = BertForSequenceClassification.from_pretrained(
@@ -76,7 +76,7 @@ def load_model():
 # Initialize model
 model, tokenizer, id2label = load_model()
 
-def predict_category(text, top_k=1):
+def predict_category(text: str, top_k: int = 1) -> List[Dict]:
     """
     Predict transaction category for the given text.
     
@@ -121,37 +121,78 @@ def predict_category(text, top_k=1):
     
     return predictions
 
-def handler(job: Dict) -> Dict:
+def batch_predict_categories(texts: List[str], top_k: int = 1) -> List[Dict]:
     """
-    RunPod handler function for processing transaction categorization requests.
+    Predict categories for multiple transaction texts.
     
     Args:
-        job (dict): Job input containing transaction text and optional parameters
+        texts (List[str]): List of transaction description texts
+        top_k (int): Number of top predictions to return for each transaction
+        
+    Returns:
+        List[Dict]: Results for each transaction with predictions
+    """
+    results = []
+    for text in texts:
+        predictions = predict_category(text, top_k=top_k)
+        results.append({
+            "text": text,
+            "predictions": predictions,
+            "top_category": predictions[0]["category"] if predictions else None
+        })
+    
+    return results
+
+def handler(job: Dict) -> Dict:
+    """
+    RunPod handler function for processing single or batch transaction categorization requests.
+    
+    Args:
+        job (dict): Job input containing transaction text(s) and optional parameters
         
     Returns:
         dict: Prediction results
     """
     job_input = job.get("input", {})
     
-    # Get transaction text
-    text = job_input.get("text")
-    if not text or not isinstance(text, str):
-        return {"error": "No valid transaction text provided"}
-    
     # Get optional parameters
     top_k = job_input.get("top_k", 1)
     if not isinstance(top_k, int) or top_k < 1:
         top_k = 1
     
-    # Make prediction
-    try:
-        predictions = predict_category(text, top_k=top_k)
-        return {
-            "predictions": predictions,
-            "top_category": predictions[0]["category"] if predictions else None
-        }
-    except Exception as e:
-        return {"error": str(e)}
+    # Handle original 'prompt' parameter for backward compatibility
+    prompt = job_input.get("prompt")
+    if prompt and isinstance(prompt, str) and not job_input.get("text"):
+        job_input["text"] = prompt
+    
+    # Check for single transaction text
+    text = job_input.get("text")
+    if text and isinstance(text, str):
+        try:
+            predictions = predict_category(text, top_k=top_k)
+            return {
+                "predictions": predictions,
+                "top_category": predictions[0]["category"] if predictions else None
+            }
+        except Exception as e:
+            return {"error": f"Error processing single transaction: {str(e)}"}
+    
+    # Check for batch of transaction texts
+    texts = job_input.get("texts")
+    if texts and isinstance(texts, list):
+        if not all(isinstance(t, str) for t in texts):
+            return {"error": "All items in 'texts' must be valid strings"}
+        
+        try:
+            results = batch_predict_categories(texts, top_k=top_k)
+            return {"results": results}
+        except Exception as e:
+            return {"error": f"Error processing batch transactions: {str(e)}"}
+    
+    # If we reached here, no valid input was provided
+    return {
+        "error": "No valid transaction text provided. Use 'text' or 'prompt' for a single transaction or 'texts' for multiple transactions"
+    }
 
 # Start the serverless worker
 runpod.serverless.start({"handler": handler})
