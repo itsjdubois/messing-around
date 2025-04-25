@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y \
 RUN git lfs install
 
 # Clone the repo and pull LFS files
-RUN git clone https://github.com/itsjdubois/messing-around /app && \
+RUN git clone git@github.com:itsjdubois/messing-around.git /app && \
     cd /app && \
     git lfs pull
 
