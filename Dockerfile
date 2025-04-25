@@ -14,6 +14,9 @@ RUN apt-get update && apt-get install -y \
 # Initialize Git LFS
 RUN git lfs install
 
+RUN git lfs pull
+
+
 # Copy application files
 COPY . /app/
 
